@@ -8,6 +8,7 @@
 struct turtle_state {
     uint32_t K[4][4];
     int v[4][32];
+    uint32_t d;
 };
 
 uint32_t swapbits(uint32_t r, int a, int b) {
@@ -32,6 +33,16 @@ uint32_t swap_decrypt(struct turtle_state *state, uint32_t r, int l) {
     return r;
 }
 
+uint32_t diffuse_encrypt(struct turtle_state *state, uint32_t r) {
+   r = (r + state->d) & 0xFFFFFFFF;
+   return r;
+}
+
+uint32_t diffuse_decrypt(struct turtle_state *state, uint32_t r) {
+    r = (r - state->d) & 0xFFFFFFFF;
+    return r;
+}
+
 void ksa(struct turtle_state *state, unsigned char * key) {
     state->K[0][0] = (key[0] << 24) + (key[1] << 16) + (key[2] << 8) + key[3];
     state->K[0][1] = (key[4] << 24) + (key[5] << 16) + (key[6] << 8) + key[7];
@@ -46,6 +57,8 @@ void ksa(struct turtle_state *state, unsigned char * key) {
             state->K[i][l] = temp;
         }
     }
+    temp = (state->K[0][0] + state->K[0][1] + state->K[0][2] + state->K[0][3] + temp) & 0xFFFFFFFF;
+    state->d = temp;
     for (int l = 0; l < 4; l++) {
         for (int i = 0; i < 32; i++) {
             state->v[l][i] = i;

@@ -8,6 +8,7 @@
 struct turtle_state {
     uint32_t K[4][4];
     int v[4][32];
+    uint32_t d;
 };
 
 uint32_t swapbits(uint32_t r, int a, int b) {
@@ -32,6 +33,16 @@ uint32_t swap_decrypt(struct turtle_state *state, uint32_t r, int l) {
     return r;
 }
 
+uint32_t diffuse_encrypt(struct turtle_state *state, uint32_t r) {
+   r = (r + state->d) & 0xFFFFFFFF;
+   return r;
+}
+
+uint32_t diffuse_decrypt(struct turtle_state *state, uint32_t r) {
+    r = (r - state->d) & 0xFFFFFFFF;
+    return r;
+}
+
 void ksa(struct turtle_state *state, unsigned char * key) {
     state->K[0][0] = (key[0] << 24) + (key[1] << 16) + (key[2] << 8) + key[3];
     state->K[0][1] = (key[4] << 24) + (key[5] << 16) + (key[6] << 8) + key[7];
@@ -46,6 +57,8 @@ void ksa(struct turtle_state *state, unsigned char * key) {
             state->K[i][l] = temp;
         }
     }
+    temp = (state->K[0][0] + state->K[0][1] + state->K[0][2] + state->K[0][3] + temp) & 0xFFFFFFFF;
+    state->d = temp;
     for (int l = 0; l < 4; l++) {
         for (int i = 0; i < 32; i++) {
             state->v[l][i] = i;
@@ -94,7 +107,6 @@ int main(int arc, char *argv[]) {
     unsigned char data[v];
     int blocks = fsize / 16;
     int fsize_extra = fsize % 16;
-    printf("%d\n", fsize_extra);
     int extra = 0;
     if (fsize_extra != 0) {
         blocks += 1;
@@ -113,7 +125,6 @@ int main(int arc, char *argv[]) {
                 int g = 15;
                 for (int b = 0; b < (v - fsize_extra); b++) {
                     data[g] = (v - fsize_extra);
-                    printf("%d\n", fsize_extra);
                 }
             }
             block[0] = (data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3];
@@ -129,6 +140,9 @@ int main(int arc, char *argv[]) {
                     block[g] = block[g] ^ block[(g - 1) & 0x03];
                     block[g] = block[g] ^ state.K[r][g];
                 }
+                for (int g = 0; g < 4; g++) {
+                    block[g] = diffuse_encrypt(&state, block[g]);
+		}
             }
             for (int r = 0; r < 4; r++) {
                 last[r] = block[r];
@@ -168,6 +182,9 @@ int main(int arc, char *argv[]) {
                 next[r] = block[r];
             }
             for (int r = (rounds -1); r != -1; r--) {
+                for (int g = 0; g < 4; g++) {
+                    block[g] = diffuse_decrypt(&state, block[g]);
+		}
                 for (int g = 4; g --> 0;) {
                     block[g] = block[g] ^ state.K[r][g];
                     block[g] = block[g] ^ block[(g - 1) & 0x03];
@@ -197,7 +214,6 @@ int main(int arc, char *argv[]) {
             if (i == (blocks-1)) {
                 int count = 0;
                 int padcheck = k[15];
-                printf("%d\n", padcheck);
                 int g = 15;
                 for (int m = 0; m < padcheck; m++) {
                     if ((int)k[g] == padcheck) {
@@ -207,7 +223,6 @@ int main(int arc, char *argv[]) {
                 }
                 if (count == padcheck) {
                     v = (v - count);
-                    printf("%d\n", count);
                 }
             }
             fwrite(k, 1, v, outfile);
