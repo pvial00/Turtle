@@ -105,14 +105,14 @@ int main(int arc, char *argv[]) {
     long fsize = ftell(infile);
     fseek(infile, 0, SEEK_SET);
     unsigned char data[v];
-    int blocks = fsize / 16;
-    int fsize_extra = fsize % 16;
-    int extra = 0;
-    if (fsize_extra != 0) {
-        blocks += 1;
-    }
     outfile = fopen(outf, "wb");
     if (strcmp(mode, "e") == 0) {
+        int blocks = fsize / 16;
+        int fsize_extra = fsize % 16;
+        int extra = 0;
+        if (fsize_extra != 0) {
+            blocks += 1;
+        }
         wrzeszcz_random(&iv, iv_length);
         fwrite(iv, 1, iv_length, outfile);
         for (int i = 0; i < 4; i++) {
@@ -125,6 +125,7 @@ int main(int arc, char *argv[]) {
                 int g = 15;
                 for (int b = 0; b < (v - fsize_extra); b++) {
                     data[g] = (v - fsize_extra);
+		    g = (g - 1);
                 }
             }
             block[0] = (data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3];
@@ -167,6 +168,12 @@ int main(int arc, char *argv[]) {
         }
     }
     else if(strcmp(mode, "d") == 0) {
+        int blocks = (fsize - iv_length) / 16;
+        int fsize_extra = (fsize - iv_length) % 16;
+        int extra = 0;
+        if (fsize_extra != 0) {
+            blocks += 1;
+        }
         fread(iv, 1, iv_length, infile);
         for (int i = 0; i < 4; i++) {
             last[i] = (iv[c] << 24) + (iv[c+1] << 16) + (iv[c+2] << 8) + iv[c+3];
