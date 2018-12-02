@@ -126,6 +126,9 @@ int main(int arc, char *argv[]) {
                     block[g] = block[g] ^ block[(g - 1) & 0x03];
                     block[g] = block[g] ^ state.K[r][g];
                 }
+		for (int g = 0; g < 4; g++) {
+                    block[g] = diffuse_encrypt(&state, block[g]);
+                }
             }
             k[3] = (block[0] & 0x000000FF);
             k[2] = (block[0] & 0x0000FF00) >> 8;
