@@ -7,8 +7,8 @@
 
 struct turtle_state {
     uint32_t K[4][4];
-    int v[4][32];
-    uint32_t d;
+    int v[4][4][32];
+    uint32_t d[4];
 };
 
 uint32_t swapbits(uint32_t r, int a, int b) {
@@ -19,27 +19,27 @@ uint32_t swapbits(uint32_t r, int a, int b) {
     return r ^ z;
 }
 
-uint32_t swap_encrypt(struct turtle_state *state, uint32_t r, int l) {
+uint32_t swap_encrypt(struct turtle_state *state, uint32_t r, int l, int round) {
    for (int i = 0; i < 31; i++) {
-      r = swapbits(r, state->v[l][i], state->v[l][i+1]);
+      r = swapbits(r, state->v[round][l][i], state->v[round][l][i+1]);
    }
    return r;
 }
 
-uint32_t swap_decrypt(struct turtle_state *state, uint32_t r, int l) {
+uint32_t swap_decrypt(struct turtle_state *state, uint32_t r, int l, int round) {
     for (int i = 31; i != 0; i--) {
-        r = swapbits(r, state->v[l][i], state->v[l][i-1]);
+        r = swapbits(r, state->v[round][l][i], state->v[round][l][i-1]);
     }
     return r;
 }
 
-uint32_t diffuse_encrypt(struct turtle_state *state, uint32_t r) {
-   r = (r + state->d) & 0xFFFFFFFF;
+uint32_t diffuse_encrypt(struct turtle_state *state, uint32_t r, int n) {
+   r = (r + state->d[n]) & 0xFFFFFFFF;
    return r;
 }
 
-uint32_t diffuse_decrypt(struct turtle_state *state, uint32_t r) {
-    r = (r - state->d) & 0xFFFFFFFF;
+uint32_t diffuse_decrypt(struct turtle_state *state, uint32_t r, int n) {
+    r = (r - state->d[n]) & 0xFFFFFFFF;
     return r;
 }
 
@@ -57,25 +57,30 @@ void ksa(struct turtle_state *state, unsigned char * key) {
             state->K[i][l] = temp;
         }
     }
-    temp = (state->K[0][0] + state->K[0][1] + state->K[0][2] + state->K[0][3] + temp) & 0xFFFFFFFF;
-    state->d = temp;
-    for (int l = 0; l < 4; l++) {
-        for (int i = 0; i < 32; i++) {
-            state->v[l][i] = i;
+    for (int i = 0; i < 4; i++) {
+        temp = (state->K[0][0] + state->K[0][1] + state->K[0][2] + state->K[0][3] + temp) & 0xFFFFFFFF;
+        state->d[i] = temp;
+    }
+    for (int r = 0; r < 4; r++) {
+        for (int l = 0; l < 4; l++) {
+            for (int i = 0; i < 32; i++) {
+                state->v[r][l][i] = i;
+            }
         }
     }
     int t = 0;
     int j = 0;
-    for (int l = 0; l < 4; l++) {
-        for (int i = 0; i < 768; i++) {
-            j = (j + key[i % 16]) & 0x1F;
-            key[i % 16] = (key[i % 16] + key[(i + 1) % 16]) & 0xFF;
-            t = state->v[l][i & 0x1F];
-            state->v[l][i & 0x1F] = state->v[l][j];
-            state->v[l][j] = t;
-        }
+    for (int r = 0; r < 4; r++) {
+        for (int l = 0; l < 4; l++) {
+            for (int i = 0; i < 768; i++) {
+                j = (j + key[i % 16]) & 0x1F;
+                key[i % 16] = (key[i % 16] + key[(i + 1) % 16]) & 0xFF;
+                t = state->v[r][l][i & 0x1F];
+                state->v[r][l][i & 0x1F] = state->v[r][l][j];
+                state->v[r][l][j] = t;
+            }
+	}
     }
-    
 }
 
 int main(int arc, char *argv[]) {
@@ -137,12 +142,12 @@ int main(int arc, char *argv[]) {
             }
             for (int r = 0; r < rounds; r++) {
                 for (int g = 0; g < 4; g++) {
-                    block[g] = swap_encrypt(&state, block[g], g);
+                    block[g] = swap_encrypt(&state, block[g], g, r);
                     block[g] = block[g] ^ block[(g - 1) & 0x03];
                     block[g] = block[g] ^ state.K[r][g];
                 }
                 for (int g = 0; g < 4; g++) {
-                    block[g] = diffuse_encrypt(&state, block[g]);
+                    block[g] = diffuse_encrypt(&state, block[g], r);
 		}
             }
             for (int r = 0; r < 4; r++) {
@@ -190,12 +195,12 @@ int main(int arc, char *argv[]) {
             }
             for (int r = (rounds -1); r != -1; r--) {
                 for (int g = 0; g < 4; g++) {
-                    block[g] = diffuse_decrypt(&state, block[g]);
+                    block[g] = diffuse_decrypt(&state, block[g], r);
 		}
                 for (int g = 4; g --> 0;) {
                     block[g] = block[g] ^ state.K[r][g];
                     block[g] = block[g] ^ block[(g - 1) & 0x03];
-                    block[g] = swap_decrypt(&state, block[g], g);
+                    block[g] = swap_decrypt(&state, block[g], g, r);
                 }
             }
             for (int r = 0; r < 4; r++) {
